@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Github;
 use App\Http\Controllers\Controller;
 use Socialite;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class GithubController extends Controller
 {
@@ -13,25 +14,30 @@ class GithubController extends Controller
         $token = $request->session()->get('github_token', null);
 
         try {
-            $user = Socialite::driver('github')->userFromToken($token);
+            $github_user = Socialite::driver('github')->userFromToken($token);
         } catch (\Exception $e) {
             return redirect('login/github');
         }
 
         $client = new \GuzzleHttp\Client();
         $res = $client->request('GET', 'https://api.github.com/user/repos', [
-            'auth' => [$user->user['login'], $token]
+            'headers' => [
+                'Authorization' => 'token ' . $token
+            ]
         ]);
 
+        $app_user = DB::select('select * from public.user where github_id = ?', [$github_user->user['login']]);
+
         return view('github', [
-            'info' => var_dump($user),
-            'nickname' => $user->nickname,
+            'user' => $app_user[0],
+            'nickname' => $github_user->nickname,
             'token' => $token,
             'repos' => array_map(function($o) {
                 return $o->name;
             }, json_decode($res->getBody()))
         ]);
     }
+
 
     public function createIssue(Request $request)
     {
